@@ -1,0 +1,485 @@
+{
+  "info": {
+    "name": "ResellingKori Partner API",
+    "description": "Every request is signed automatically (RK2) by the collection pre-request script. Set base_url (https://resellingkori.com/wp-json/rk/v1), key_id and secret in the collection variables. Replace rk_product_id in the order bodies with a real product id from GET /products. Never share an exported collection that contains your secret.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// RK2 signing for every request in this collection (ResellingKori Partner API).",
+          "// Collection variables: base_url (for example https://resellingkori.com/wp-json/rk/v1), key_id and secret.",
+          "const keyId = pm.collectionVariables.get('key_id') || pm.environment.get('key_id');",
+          "const secret = pm.collectionVariables.get('secret') || pm.environment.get('secret');",
+          "if (!keyId || !secret || keyId === 'rkk_your_key_id') {",
+          "  throw new Error('Set key_id and secret in the collection variables (collection > Variables) before you send a request.');",
+          "}",
+          "const enc = (v) => encodeURIComponent(String(v)).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());",
+          "// The signed route is the REST route without \"/wp-json\", for example /rk/v1/orders. When this script runs, Postman has not",
+          "// replaced {{base_url}} in the URL yet, so pm.request.url.path only holds what comes after it (/orders): the prefix",
+          "// (/rk/v1) is taken from base_url. A request whose URL is typed in full (https://.../wp-json/rk/v1/orders) works too.",
+          "const baseUrl = pm.variables.replaceIn('{{base_url}}');",
+          "const baseAt = baseUrl.indexOf('/wp-json/');",
+          "const basePrefix = baseAt >= 0 ? baseUrl.slice(baseAt + 8).replace(/[?#].*$/, '').replace(/\\/+$/, '') : '';",
+          "const own = '/' + pm.request.url.path.map((p) => pm.variables.replaceIn(p)).join('/');",
+          "const ownAt = own.indexOf('/wp-json/');",
+          "let route = ownAt >= 0 ? own.slice(ownAt + 8) : basePrefix + own;",
+          "const params = {};",
+          "pm.request.url.query.each((q) => {",
+          "  if (q.disabled) return;",
+          "  const k = pm.variables.replaceIn(q.key);",
+          "  const v = pm.variables.replaceIn(q.value == null ? '' : q.value);",
+          "  if (k === 'rest_route') { route = decodeURIComponent(v); } else { params[k] = v; }",
+          "});",
+          "if (route.indexOf('/rk/v1/') !== 0) {",
+          "  throw new Error('Cannot work out the API route (got \"' + route + '\"). Set base_url to https://resellingkori.com/wp-json/rk/v1 in the collection variables.');",
+          "}",
+          "const query = Object.keys(params).sort().map((k) => enc(k) + '=' + enc(params[k])).join('&');",
+          "const method = pm.request.method.toUpperCase();",
+          "let body = '';",
+          "if (method !== 'GET' && pm.request.body && pm.request.body.raw) {",
+          "  body = pm.variables.replaceIn(pm.request.body.raw);",
+          "  pm.request.body.raw = body; // send exactly the bytes that are signed",
+          "}",
+          "const ts = Math.floor(Date.now() / 1000);",
+          "const nonce = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);",
+          "const canonical = ['RK2', String(ts), nonce, method, route, query, CryptoJS.SHA256(body).toString(CryptoJS.enc.Hex)].join('\\n');",
+          "const sig = CryptoJS.HmacSHA256(canonical, secret).toString(CryptoJS.enc.Hex);",
+          "pm.request.headers.upsert({ key: 'X-RK-Key', value: keyId });",
+          "pm.request.headers.upsert({ key: 'X-RK-Timestamp', value: String(ts) });",
+          "pm.request.headers.upsert({ key: 'X-RK-Nonce', value: nonce });",
+          "pm.request.headers.upsert({ key: 'X-RK-Signature', value: sig });",
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://resellingkori.com/wp-json/rk/v1"
+    },
+    {
+      "key": "key_id",
+      "value": "rkk_your_key_id"
+    },
+    {
+      "key": "secret",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Ping (who am I)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/ping",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "ping"
+          ]
+        },
+        "description": ""
+      }
+    },
+    {
+      "name": "Catalogue",
+      "item": [
+        {
+          "name": "List products (page 1)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products?page=1&per_page=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Products changed since",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products?updated_after=2026-11-01T00:00:00Z&per_page=100",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "updated_after",
+                  "value": "2026-11-01T00:00:00Z"
+                },
+                {
+                  "key": "per_page",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "One product with description",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products/123?include=details,description",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products",
+                "123"
+              ],
+              "query": [
+                {
+                  "key": "include",
+                  "value": "details,description"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "By SKU",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products/by-sku?skus=SKU1,SKU2",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products",
+                "by-sku"
+              ],
+              "query": [
+                {
+                  "key": "skus",
+                  "value": "SKU1,SKU2"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products/search?q=headphone&per_page=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "headphone"
+                },
+                {
+                  "key": "per_page",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Validate order (dry run)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/validate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "validate"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schema\": 2,\n  \"external_order_id\": \"TEST-{{$timestamp}}\",\n  \"external_order_number\": \"#TEST\",\n  \"currency\": \"BDT\",\n  \"partial\": false,\n  \"customer\": {\n    \"name\": \"Test Customer\",\n    \"phone\": \"01700000000\",\n    \"email\": \"\",\n    \"address_1\": \"House 1, Road 1, Dhanmondi\",\n    \"address_2\": \"\",\n    \"city\": \"Dhaka\",\n    \"state\": \"Dhaka\",\n    \"postcode\": \"1209\",\n    \"country\": \"BD\"\n  },\n  \"items\": [\n    {\n      \"external_item_id\": 1,\n      \"rk_product_id\": 0,\n      \"rk_variation_id\": 0,\n      \"quantity\": 1,\n      \"selling_unit_price\": \"1190.00\"\n    }\n  ],\n  \"payment\": {\n    \"method\": \"cod\",\n    \"delivery_charge\": \"100.00\",\n    \"prepaid_amount\": \"0.00\",\n    \"cod_amount\": \"1290.00\"\n  },\n  \"note\": \"Test order - please cancel\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create order",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "description": "Idempotent per external_order_id. Re-sending the identical body returns the same order (duplicate:true).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schema\": 2,\n  \"external_order_id\": \"TEST-{{$timestamp}}\",\n  \"external_order_number\": \"#TEST\",\n  \"currency\": \"BDT\",\n  \"partial\": false,\n  \"customer\": {\n    \"name\": \"Test Customer\",\n    \"phone\": \"01700000000\",\n    \"email\": \"\",\n    \"address_1\": \"House 1, Road 1, Dhanmondi\",\n    \"address_2\": \"\",\n    \"city\": \"Dhaka\",\n    \"state\": \"Dhaka\",\n    \"postcode\": \"1209\",\n    \"country\": \"BD\"\n  },\n  \"items\": [\n    {\n      \"external_item_id\": 1,\n      \"rk_product_id\": 0,\n      \"rk_variation_id\": 0,\n      \"quantity\": 1,\n      \"selling_unit_price\": \"1190.00\"\n    }\n  ],\n  \"payment\": {\n    \"method\": \"cod\",\n    \"delivery_charge\": \"100.00\",\n    \"prepaid_amount\": \"0.00\",\n    \"cod_amount\": \"1290.00\"\n  },\n  \"note\": \"Test order - please cancel\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Lookup by your reference",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/lookup?external_order_id=TEST-123",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "lookup"
+              ],
+              "query": [
+                {
+                  "key": "external_order_id",
+                  "value": "TEST-123"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "List my orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders?page=1&per_page=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Orders changed since",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders?updated_after=2026-11-01T00:00:00Z",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "updated_after",
+                  "value": "2026-11-01T00:00:00Z"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Status of several",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/status?ids=101,102",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "ids",
+                  "value": "101,102"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Cancel",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "cancel"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_order_id\": \"TEST-123\",\n  \"reason\": \"Customer cancelled\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Register webhook",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/connection",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "connection"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"callback_url\": \"https://your-site.example/rk-webhook\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Remove webhook",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/connection",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "connection"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"remove_callback\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
